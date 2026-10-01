@@ -93,11 +93,17 @@ button.action {
   background: var(--accent); color: #fff; border: none; border-radius: 999px;
   font-size: 14px; font-weight: 700; padding: 10px 20px; cursor: pointer;
 }
+.back-link {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600;
+  color: var(--sub); text-decoration: none; margin-bottom: 10px;
+}
+.back-link:hover { color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
+<a class="back-link" href="index.html">&larr; Back to Games</a>
 <h1>ArchWordle</h1>
 <p class="sub">Guess this year's architecture vocabulary \u2014 one term at a time.</p>
 </header>

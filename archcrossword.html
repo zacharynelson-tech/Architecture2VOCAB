@@ -83,11 +83,17 @@ button.action.secondary { background: var(--card); color: var(--ink); border: 1p
 #result-panel h3 { font-size: 15px; margin: 0 0 10px; }
 .reveal-item { font-size: 12.5px; margin-bottom: 6px; }
 .reveal-item b { color: var(--accent); }
+.back-link {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600;
+  color: var(--sub); text-decoration: none; margin-bottom: 10px;
+}
+.back-link:hover { color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
+<a class="back-link" href="index.html">&larr; Back to Games</a>
 <h1>ArchCrossword</h1>
 <p class="sub">This year's architecture vocabulary, cycle by cycle.</p>
 </header>

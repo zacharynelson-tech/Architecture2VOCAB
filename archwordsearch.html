@@ -69,11 +69,17 @@ button.action.secondary { background: var(--card); color: var(--ink); border: 1p
 .clue-item.found { background: var(--good-soft); border-color: var(--found); text-decoration: line-through; color: var(--sub); }
 .clue-item b { color: var(--accent); }
 .clue-item.found b { color: var(--good); text-decoration: none; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600;
+  color: var(--sub); text-decoration: none; margin-bottom: 10px;
+}
+.back-link:hover { color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
+<a class="back-link" href="index.html">&larr; Back to Games</a>
 <h1>ArchWordSearch</h1>
 <p class="sub">Read the definition, figure out the term, then find it hidden in the grid.</p>
 </header>
