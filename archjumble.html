@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ArchJumble</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root {
+  --ink: #1C1E21; --sub: #6B7280; --line: #D8D5CC;
+  --bg: #FAF9F6; --card: #FFFFFF;
+  --accent: #2563EB; --accent-soft: #EFF4FF;
+  --good: #15803D; --good-soft: #EAF7EE;
+  --bad: #B91C1C; --bad-soft: #FDEEEE;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EDEDED; --sub: #9AA0A6; --line: #3A3A3C;
+    --bg: #121213; --card: #1E1E1F; --accent-soft: #1B2A4A; --good-soft: #163822; --bad-soft: #3A1A1A;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #EDEDED; --sub: #9AA0A6; --line: #3A3A3C;
+  --bg: #121213; --card: #1E1E1F; --accent-soft: #1B2A4A; --good-soft: #163822; --bad-soft: #3A1A1A;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  min-height: 100%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 16px 12px 40px;
+}
+.wrap { width: 100%; max-width: 480px; }
+header { text-align: center; margin-bottom: 6px; }
+h1 { font-size: 22px; font-weight: 800; margin: 4px 0 2px; letter-spacing: -0.02em; }
+.sub { font-size: 13px; color: var(--sub); margin: 0 0 14px; }
+.controls-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+#cycle-select {
+  font-size: 13px; font-weight: 700; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; max-width: 100%;
+}
+button.action {
+  background: var(--accent); color: #fff; border: none; border-radius: 999px;
+  font-size: 13px; font-weight: 700; padding: 8px 16px; cursor: pointer;
+}
+button.action.secondary { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+#score-pill { display: block; text-align: center; font-size: 12.5px; color: var(--sub); margin-bottom: 10px; }
+#clue-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 18px; text-align: center;
+}
+#clue-text { font-size: 14.5px; line-height: 1.4; margin: 0; color: var(--sub); font-style: italic; }
+.segments { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 18px; }
+.segment { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sep-char { font-size: 20px; color: var(--sub); align-self: center; margin-top: 20px; }
+.answer-row, .scramble-row { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+.tile {
+  width: 34px; height: 34px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; text-transform: uppercase; cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.answer-row .tile { background: var(--bg); border: 2px solid var(--line); color: var(--ink); }
+.answer-row .tile.filled { background: var(--accent-soft); border-color: var(--accent); cursor: pointer; }
+.scramble-row .tile { background: var(--card); border: 2px solid var(--line); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.scramble-row .tile.used { visibility: hidden; }
+#message { text-align: center; font-size: 14px; font-weight: 700; min-height: 20px; margin-bottom: 10px; }
+#message.good { color: var(--good); }
+#message.bad { color: var(--bad); }
+#result-panel {
+  display: none; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px; margin-top: 10px; text-align: center;
+}
+#result-panel.show { display: block; animation: popIn 0.25s ease-out; }
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+#result-term { font-size: 18px; font-weight: 800; margin: 0 0 4px; }
+#result-def { font-size: 13.5px; color: var(--sub); margin: 0; line-height: 1.4; }
+.actions-row { display: flex; justify-content: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>ArchJumble</h1>
+<p class="sub">Unscramble the letters to spell this year's vocabulary.</p>
+</header>
+<div class="controls-row">
+  <select id="cycle-select"></select>
+  <button class="action" id="new-word-btn">New Word</button>
+</div>
+<span id="score-pill"></span>
+<div id="clue-card"><p id="clue-text"></p></div>
+<div id="segments-wrap" class="segments"></div>
+<div id="message"></div>
+<div class="actions-row">
+  <button class="action secondary" id="shuffle-btn">Shuffle</button>
+  <button class="action secondary" id="hint-btn">Hint</button>
+  <button class="action secondary" id="giveup-btn">Give Up</button>
+</div>
+<div id="result-panel">
+  <p id="result-label" style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin:0 0 6px;">Solved!</p>
+  <p id="result-term"></p>
+  <p id="result-def"></p>
+</div>
+</div>
+<script>
+const CYCLES = [
+  { num: 1, title: "Site Analysis & Topography", words: [
+    {term:"site plan", def:"A scaled drawing showing an entire property, including buildings and their relationship to the site."},
+    {term:"plot plan", def:"A simplified site plan focused on legal boundaries and building placement, often used for permitting."},
+    {term:"site analysis", def:"The study of a site's physical, environmental, and legal conditions before design begins."},
+    {term:"site diagramming", def:"Using symbols and diagrams to represent invisible site forces like sun, wind, and views."},
+    {term:"topography", def:"The shape and elevation of the land's surface."},
+    {term:"contours", def:"Lines connecting points of equal elevation on a site."},
+    {term:"contour elevation", def:"The specific height value that a single contour line represents."},
+    {term:"contour profile", def:"A side view showing how the ground rises and falls along one line."},
+    {term:"gis", display:"GIS", def:"Geographic Information System \u2014 digital mapping software used to research site data."},
+    {term:"setbacks", def:"The required minimum distance a structure must be built from a property line."},
+    {term:"utilities", def:"Water, sewer, electric, and gas connections that service a building."},
+    {term:"soil types", def:"Different soil compositions that affect a foundation's design and bearing capacity."},
+  ]},
+  { num: 2, title: "Site Orientation & Plot Plans", words: [
+    {term:"easement", def:"A legal right for someone other than the property owner to use part of the land for a specific purpose."},
+    {term:"setback", def:"The required minimum distance a structure must be built from a property line."},
+    {term:"metes-and-bounds", def:"A legal method of describing property boundaries using directions and distances."},
+    {term:"legal description", def:"A formal written description of a property's boundaries used for legal purposes."},
+    {term:"survey plat", def:"A drawing showing the boundaries and dimensions of a piece of land."},
+    {term:"circulation", def:"The pathways people and vehicles use to move through or around a site."},
+    {term:"parking ratio", def:"The required number of parking spaces relative to a building's size or use."},
+    {term:"bench mark", def:"A fixed point of known elevation used as a reference for surveying."},
+    {term:"right-of-way", def:"A strip of land legally set aside for roads, utilities, or public passage."},
+    {term:"annotations", def:"Notes, symbols, and dimensions added to a drawing to communicate information."},
+  ]},
+  { num: 3, title: "Foundation Types", words: [
+    {term:"foundation", def:"The structural system that transfers a building's loads safely into the ground."},
+    {term:"slab-on-grade", def:"A foundation type made of a concrete slab poured directly on the ground."},
+    {term:"crawlspace", def:"A foundation type with a shallow, unfinished space beneath the floor."},
+    {term:"full basement", def:"A foundation type with a full-height, usable below-grade level."},
+    {term:"pole foundation", def:"A foundation system using vertical poles or posts driven into the ground."},
+    {term:"excavation", def:"The process of removing earth to prepare for a foundation."},
+    {term:"shallow foundation", def:"A foundation that transfers loads to soil near the ground's surface."},
+    {term:"hatch pattern", def:"A repeating pattern of lines used in a drawing to represent a specific material."},
+    {term:"presentation drawing", def:"A polished drawing meant to communicate design ideas to a client."},
+    {term:"working drawing", def:"A technical drawing used to guide actual construction."},
+    {term:"construction drawing", def:"A detailed drawing used by builders to construct a project."},
+  ]},
+  { num: 4, title: "Foundation Systems & Materials", words: [
+    {term:"spread footing", def:"A footing that spreads a column or wall's load over a wider area of soil."},
+    {term:"foundation wall", def:"A wall that transfers building loads to the footing and resists soil pressure."},
+    {term:"isolated footing", def:"A footing that supports a single column, independent of other footings."},
+    {term:"stepped footing", def:"A footing that changes elevation in steps to follow sloped ground."},
+    {term:"concrete slab", def:"A flat, horizontal concrete surface, often used as a floor."},
+    {term:"vapor barrier", def:"A material that prevents moisture from passing through a floor or wall assembly."},
+    {term:"control joint", def:"A groove cut into concrete to control where cracking occurs."},
+    {term:"icf", display:"ICF", def:"Insulated Concrete Form \u2014 a foundation wall system using stay-in-place insulating forms filled with concrete."},
+    {term:"precast concrete", def:"Concrete components manufactured off-site and installed once cured."},
+    {term:"brick shelf", def:"A ledge in a foundation wall that supports a brick veneer."},
+    {term:"sheet index", def:"A list identifying every drawing in a complete construction set."},
+  ]},
+  { num: 5, title: "Foundation Components & Sheet Graphics", words: [
+    {term:"pole foundation", def:"A foundation system using vertical poles or posts driven into the ground."},
+    {term:"pile foundation", def:"A deep foundation using long columns driven into the ground to reach stable soil."},
+    {term:"caisson foundation", def:"A deep foundation formed by drilling a shaft and filling it with concrete."},
+    {term:"footing", def:"The base of a foundation that spreads the building's load onto the soil."},
+    {term:"stem wall", def:"The vertical wall of a foundation that connects the footing to the structure above."},
+    {term:"anchor bolt", def:"A bolt that connects a building's sill plate to the foundation."},
+    {term:"vapor barrier", def:"A material that prevents moisture from passing through a floor or wall assembly."},
+    {term:"rebar", def:"Steel reinforcing bar embedded in concrete to increase its strength."},
+    {term:"damp-proofing", def:"A treatment applied to a foundation to resist moisture in well-drained soil."},
+    {term:"title block", def:"The section of a drawing sheet containing project information like scale, date, and drawn-by."},
+    {term:"sheet size", def:"The standard paper dimensions used for a construction drawing."},
+  ]},
+  { num: 6, title: "Loads, Framing, Floor Systems, Stairs & Decks", words: [
+    {term:"dead load", def:"The permanent weight of a structure and its fixed components."},
+    {term:"live load", def:"A temporary or moving load from occupants, furniture, or snow."},
+    {term:"wind load", def:"A dynamic force exerted on a structure by wind."},
+    {term:"seismic load", def:"A dynamic force exerted on a structure by earthquake activity."},
+    {term:"platform framing", def:"A framing method where each floor is built as its own platform."},
+    {term:"balloon framing", def:"A framing method using studs that run continuously from foundation to roof."},
+    {term:"joist", def:"A horizontal framing member that supports a floor or ceiling."},
+    {term:"span table", def:"A reference chart used to determine the correct size and spacing of framing members."},
+    {term:"beam", def:"A horizontal structural member that supports loads from joists or other members above."},
+    {term:"rise", def:"The vertical height of a single stair step."},
+    {term:"run", def:"The horizontal depth of a single stair step."},
+    {term:"stringer", def:"The diagonal structural member that supports a stair's treads and risers."},
+    {term:"tread", def:"The horizontal surface of a stair step."},
+    {term:"riser", def:"The vertical surface between two stair treads."},
+    {term:"headroom", def:"The vertical clearance above a stair or walkway."},
+  ]},
+  { num: 7, title: "Walls, Insulation, Fireplace, Doors/Windows, Millwork", words: [
+    {term:"stud", def:"A vertical framing member used to build a wall."},
+    {term:"sole plate", def:"The horizontal framing member at the bottom of a wall that studs attach to."},
+    {term:"sheathing", def:"A structural panel material applied to the exterior of framing."},
+    {term:"r-value", display:"R-value", def:"A measure of a material's resistance to heat flow."},
+    {term:"vapor retarder", def:"A material that slows the movement of water vapor through a wall assembly."},
+    {term:"ventilation", def:"The controlled movement of air into and out of a space."},
+    {term:"fireplace", def:"A structure designed to safely contain and vent a wood or gas fire."},
+    {term:"chimney", def:"A vertical structure that carries smoke and gases away from a fireplace."},
+    {term:"flue", def:"The passage inside a chimney that carries smoke and gases outward."},
+    {term:"doorframe", def:"The structural frame that a door is hung within."},
+    {term:"window opening", def:"The framed opening in a wall sized to receive a window unit."},
+    {term:"millwork", def:"Finished wood products like trim, molding, and cabinetry."},
+    {term:"molding", def:"A decorative strip of material used to trim edges or joints."},
+    {term:"trim/casing", def:"Finish material used around doors, windows, and other openings."},
+  ]},
+  { num: 8, title: "Roofing, Dormers & Sustainability", words: [
+    {term:"rafter", def:"A sloped structural member that supports a roof."},
+    {term:"ridge board", def:"The horizontal board at the peak of a roof where rafters meet."},
+    {term:"collar tie", def:"A horizontal member connecting opposing rafters to resist spreading."},
+    {term:"eave", def:"The edge of a roof that overhangs the exterior wall."},
+    {term:"soffit", def:"The underside of an overhanging roof eave."},
+    {term:"fascia", def:"The trim board that runs along the edge of a roof."},
+    {term:"truss", def:"A prefabricated, engineered structural frame used to support a roof or floor."},
+    {term:"underlayment", def:"A protective material installed beneath finished roofing or flooring."},
+    {term:"shingle", def:"An individual overlapping unit of roofing material."},
+    {term:"membrane roofing", def:"A continuous waterproof material used on low-slope roofs."},
+    {term:"gutter", def:"A channel that collects and directs water off a roof."},
+    {term:"downspout", def:"A vertical pipe that carries water from a gutter to the ground."},
+    {term:"dormer", def:"A structure projecting from a sloped roof, usually housing a window."},
+    {term:"green roof", def:"A roof partially or fully covered with vegetation."},
+  ]},
+  { num: 9, title: "Capstone Build", words: [
+    {term:"presentation set", def:"A polished, client-facing set of drawings used to communicate a design."},
+    {term:"detail drawing", def:"A large-scale drawing showing a specific building component in depth."},
+    {term:"coordination", def:"Making sure every drawing in a set agrees with every other drawing."},
+    {term:"portfolio", def:"A curated collection of a person's work used to showcase their skills."},
+    {term:"peer review", def:"A structured process of giving and receiving feedback from classmates."},
+  ]},
+  { num: 10, title: "Review & Portfolio", words: [
+    {term:"portfolio", def:"A curated collection of a person's work used to showcase their skills."},
+    {term:"workmanship", def:"The skill and quality demonstrated in the execution of a task."},
+    {term:"competency", def:"A demonstrated ability to perform a specific skill or task."},
+    {term:"reflection", def:"Thoughtful consideration of one's own work, growth, or learning."},
+    {term:"proficiency", def:"A level of skill that meets the expected standard for a task."},
+  ]},
+];
+
+function displayOf(entry) {
+  return entry.display || (entry.term.charAt(0).toUpperCase() + entry.term.slice(1));
+}
+
+function tokenize(term) {
+  const tokens = [];
+  const regex = /([a-z]+)|([\s\-\/]+)/g;
+  let m;
+  const lower = term.toLowerCase();
+  while ((m = regex.exec(lower)) !== null) {
+    if (m[1]) tokens.push({ type: "word", letters: m[1].split("") });
+    else {
+      let ch = " ";
+      if (m[2].includes("-")) ch = "-";
+      else if (m[2].includes("/")) ch = "/";
+      tokens.push({ type: "sep", char: ch });
+    }
+  }
+  return tokens;
+}
+
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function scrambleWordToken(letters, maxAttempts) {
+  if (letters.length <= 1) return letters.slice();
+  for (let i = 0; i < maxAttempts; i++) {
+    const s = shuffleArray(letters);
+    if (s.join("") !== letters.join("")) return s;
+  }
+  return shuffleArray(letters);
+}
+
+function dedupedPool(cycleList) {
+  const seen = new Set();
+  const pool = [];
+  cycleList.forEach(c => c.words.forEach(w => {
+    if (!seen.has(w.term)) { seen.add(w.term); pool.push(w); }
+  }));
+  return pool;
+}
+
+function populateCycleSelect() {
+  const sel = document.getElementById("cycle-select");
+  const allOpt = document.createElement("option");
+  allOpt.value = "all";
+  allOpt.textContent = "All Cycles";
+  sel.appendChild(allOpt);
+  CYCLES.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = String(c.num);
+    const rangeLabel = c.num === 1 ? "Cycle 1" : "Cycles 1\u2013" + c.num;
+    opt.textContent = rangeLabel + " \u2014 through " + c.title;
+    sel.appendChild(opt);
+  });
+  sel.value = "all";
+  sel.addEventListener("change", newWord);
+}
+
+function getActivePool() {
+  const sel = document.getElementById("cycle-select");
+  if (sel.value === "all") return dedupedPool(CYCLES);
+  const selectedNum = parseInt(sel.value, 10);
+  return dedupedPool(CYCLES.filter(c => c.num <= selectedNum));
+}
+
+let current = null; // {entry, tokens, wordTokens: [{letters, scrambled, filled: [], used: []}]}
+let solvedCount = 0;
+let attemptedCount = 0;
+let streak = 0;
+let bestStreak = 0;
+
+function newWord() {
+  const pool = getActivePool();
+  const entry = pool[Math.floor(Math.random() * pool.length)];
+  const tokens = tokenize(entry.term);
+  const wordTokens = tokens.filter(t => t.type === "word").map(t => ({
+    letters: t.letters,
+    scrambled: scrambleWordToken(t.letters, 20),
+    filled: new Array(t.letters.length).fill(null),   // holds {char, scrambleIdx} or null
+    used: new Array(t.letters.length).fill(false),    // which scrambled tiles are used (by index)
+  }));
+  current = { entry, tokens, wordTokens };
+  document.getElementById("result-panel").classList.remove("show");
+  document.getElementById("message").textContent = "";
+  document.getElementById("message").className = "";
+  document.getElementById("clue-text").textContent = "Unscramble the term below \u2014 the definition will reveal once you solve it.";
+  renderSegments();
+  updateScore();
+}
+
+function updateScore() {
+  const streakText = streak > 0 ? ` \u00b7 \ud83d\udd25 Streak: ${streak}` : "";
+  const bestText = bestStreak > 0 ? ` (best: ${bestStreak})` : "";
+  document.getElementById("score-pill").textContent = `Solved ${solvedCount} of ${attemptedCount} attempted${streakText}${bestText}`;
+}
+
+function renderSegments() {
+  const wrap = document.getElementById("segments-wrap");
+  wrap.innerHTML = "";
+  let wordIdx = 0;
+  current.tokens.forEach(tok => {
+    if (tok.type === "sep") {
+      const sepEl = document.createElement("div");
+      sepEl.className = "sep-char";
+      sepEl.textContent = tok.char === " " ? "\u00A0\u00A0" : tok.char;
+      wrap.appendChild(sepEl);
+      return;
+    }
+    const capturedWordIdx = wordIdx; // fix: freeze this iteration's index for the closures below
+    const wt = current.wordTokens[capturedWordIdx];
+    const segDiv = document.createElement("div");
+    segDiv.className = "segment";
+
+    const answerRow = document.createElement("div");
+    answerRow.className = "answer-row";
+    wt.filled.forEach((f, slotIdx) => {
+      const tile = document.createElement("div");
+      tile.className = "tile" + (f ? " filled" : "");
+      tile.textContent = f ? f.char : "";
+      if (f) tile.addEventListener("click", () => unfillSlot(capturedWordIdx, slotIdx));
+      answerRow.appendChild(tile);
+    });
+
+    const scrambleRow = document.createElement("div");
+    scrambleRow.className = "scramble-row";
+    wt.scrambled.forEach((ch, si) => {
+      const tile = document.createElement("div");
+      tile.className = "tile" + (wt.used[si] ? " used" : "");
+      tile.textContent = ch;
+      tile.addEventListener("click", () => fillNext(capturedWordIdx, si));
+      scrambleRow.appendChild(tile);
+    });
+
+    segDiv.appendChild(answerRow);
+    segDiv.appendChild(scrambleRow);
+    wrap.appendChild(segDiv);
+    wordIdx++;
+  });
+}
+
+function fillNext(wordIdx, scrambleIdx) {
+  const wt = current.wordTokens[wordIdx];
+  if (wt.used[scrambleIdx]) return;
+  const nextSlot = wt.filled.findIndex(f => f === null);
+  if (nextSlot === -1) return;
+  wt.filled[nextSlot] = { char: wt.scrambled[scrambleIdx], scrambleIdx };
+  wt.used[scrambleIdx] = true;
+  renderSegments();
+  checkIfComplete();
+}
+
+function unfillSlot(wordIdx, slotIdx) {
+  const wt = current.wordTokens[wordIdx];
+  const f = wt.filled[slotIdx];
+  if (!f) return;
+  wt.used[f.scrambleIdx] = false;
+  wt.filled[slotIdx] = null;
+  renderSegments();
+}
+
+function allSegmentsFull() {
+  return current.wordTokens.every(wt => wt.filled.every(f => f !== null));
+}
+
+function checkIfComplete() {
+  if (!allSegmentsFull()) return;
+  attemptedCount++;
+  const correct = current.wordTokens.every(wt => wt.filled.map(f => f.char).join("") === wt.letters.join(""));
+  const msg = document.getElementById("message");
+  if (correct) {
+    solvedCount++;
+    streak++;
+    bestStreak = Math.max(bestStreak, streak);
+    msg.textContent = "Correct!";
+    msg.className = "good";
+    showReveal(true);
+  } else {
+    msg.textContent = "Not quite \u2014 try rearranging.";
+    msg.className = "bad";
+  }
+  updateScore();
+}
+
+function showReveal(wasSolved) {
+  document.getElementById("result-label").textContent = wasSolved ? "Solved!" : "Here's the answer";
+  document.getElementById("result-label").style.color = wasSolved ? "var(--good)" : "var(--sub)";
+  document.getElementById("result-term").textContent = displayOf(current.entry);
+  document.getElementById("result-def").textContent = current.entry.def;
+  document.getElementById("result-panel").classList.add("show");
+}
+
+function shuffleCurrent() {
+  current.wordTokens.forEach(wt => {
+    // only reshuffle the letters not yet placed, keep placed ones untouched
+    const remainingIndices = wt.scrambled.map((_, i) => i).filter(i => !wt.used[i]);
+    const remainingLetters = remainingIndices.map(i => wt.scrambled[i]);
+    const reshuffled = shuffleArray(remainingLetters);
+    remainingIndices.forEach((origIdx, k) => { wt.scrambled[origIdx] = reshuffled[k]; });
+  });
+  renderSegments();
+}
+
+function giveHint() {
+  for (const wt of current.wordTokens) {
+    const slot = wt.filled.findIndex(f => f === null);
+    if (slot === -1) continue;
+    const correctChar = wt.letters[slot];
+    const scrambleIdx = wt.scrambled.findIndex((ch, i) => ch === correctChar && !wt.used[i]);
+    if (scrambleIdx !== -1) {
+      wt.filled[slot] = { char: wt.scrambled[scrambleIdx], scrambleIdx };
+      wt.used[scrambleIdx] = true;
+      renderSegments();
+      checkIfComplete();
+      return;
+    }
+  }
+}
+
+function giveUp() {
+  attemptedCount++;
+  streak = 0;
+  current.wordTokens.forEach(wt => {
+    wt.filled = wt.letters.map(ch => ({ char: ch, scrambleIdx: -1 }));
+    wt.used = wt.used.map(() => true);
+  });
+  renderSegments();
+  document.getElementById("message").textContent = "";
+  showReveal(false);
+  updateScore();
+}
+
+document.getElementById("new-word-btn").addEventListener("click", newWord);
+document.getElementById("shuffle-btn").addEventListener("click", shuffleCurrent);
+document.getElementById("hint-btn").addEventListener("click", giveHint);
+document.getElementById("giveup-btn").addEventListener("click", giveUp);
+
+populateCycleSelect();
+const urlParams = new URLSearchParams(window.location.search);
+const cycleParam = urlParams.get("cycle");
+if (cycleParam && (cycleParam === "all" || CYCLES.some(c => String(c.num) === cycleParam))) {
+  document.getElementById("cycle-select").value = cycleParam;
+}
+newWord();
+</script>
+</body>
+</html>

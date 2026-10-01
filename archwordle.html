@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ArchWordle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root {
+  --ink: #1C1E21; --sub: #6B7280; --line: #D8D5CC;
+  --bg: #FAF9F6; --card: #FFFFFF;
+  --accent: #2563EB;
+  --green: #6AAA64; --yellow: #C9B458; --gray: #787C7E;
+  --key-bg: #D3D6DA; --key-text: #1C1E21;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EDEDED; --sub: #9AA0A6; --line: #3A3A3C;
+    --bg: #121213; --card: #1E1E1F;
+    --key-bg: #565758; --key-text: #EDEDED;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #EDEDED; --sub: #9AA0A6; --line: #3A3A3C;
+  --bg: #121213; --card: #1E1E1F;
+  --key-bg: #565758; --key-text: #EDEDED;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  min-height: 100%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 16px 12px 32px;
+}
+.wrap { width: 100%; max-width: 460px; }
+header { text-align: center; margin-bottom: 6px; }
+h1 { font-size: 22px; font-weight: 800; margin: 4px 0 2px; letter-spacing: -0.02em; }
+.sub { font-size: 13px; color: var(--sub); margin: 0 0 14px; }
+.meta-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.pill { font-size: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--sub); }
+#cycle-select {
+  font-size: 13px; font-weight: 700; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+  max-width: 100%;
+}
+#board {
+  display: flex; flex-direction: column; gap: 6px; margin: 0 auto 16px;
+  align-items: center;
+}
+.row { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
+.tile {
+  width: 34px; height: 34px; border: 2px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 700; text-transform: uppercase;
+  border-radius: 4px; background: var(--card); color: var(--ink);
+  transition: transform 0.15s;
+  flex: none;
+}
+.tile.filled { border-color: var(--sub); }
+.tile.green { background: var(--green); border-color: var(--green); color: #fff; }
+.tile.yellow { background: var(--yellow); border-color: var(--yellow); color: #fff; }
+.tile.gray { background: var(--gray); border-color: var(--gray); color: #fff; }
+#message {
+  min-height: 20px; text-align: center; font-size: 14px; font-weight: 700;
+  margin-bottom: 10px; color: var(--accent);
+}
+#keyboard { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.krow { display: flex; gap: 5px; }
+.key {
+  background: var(--key-bg); color: var(--key-text); border: none;
+  border-radius: 4px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  padding: 0; height: 42px; min-width: 28px; flex: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.key.wide { flex: 1.6; font-size: 10px; }
+.key.symbol { flex: 0.8; font-size: 16px; }
+.key.space { flex: 3; font-size: 11px; }
+.key.green { background: var(--green); color: #fff; }
+.key.yellow { background: var(--yellow); color: #fff; }
+.key.gray { background: var(--gray); color: #fff; }
+#result-panel {
+  display: none; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px; margin-top: 14px; text-align: center;
+}
+#result-panel.show { display: block; }
+#result-term { font-size: 18px; font-weight: 800; margin: 0 0 4px; }
+#result-def { font-size: 13.5px; color: var(--sub); margin: 0 0 12px; line-height: 1.4; }
+button.action {
+  background: var(--accent); color: #fff; border: none; border-radius: 999px;
+  font-size: 14px; font-weight: 700; padding: 10px 20px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>ArchWordle</h1>
+<p class="sub">Guess this year's architecture vocabulary \u2014 one term at a time.</p>
+</header>
+<div class="meta-row">
+  <select id="cycle-select"></select>
+</div>
+<div class="meta-row">
+  <span class="pill" id="length-pill">7 letters</span>
+  <span class="pill" id="guess-pill">Guess 1 of 6</span>
+</div>
+<div id="board"></div>
+<div id="message"></div>
+<div id="keyboard"></div>
+<div id="result-panel">
+  <p id="result-term"></p>
+  <p id="result-def"></p>
+  <button class="action" id="new-word-btn">New word</button>
+</div>
+</div>
+<script>
+const CYCLES = [
+  { num: 1, title: "Site Analysis & Topography", words: [
+    {term:"site plan", def:"A scaled drawing showing an entire property, including buildings and their relationship to the site."},
+    {term:"plot plan", def:"A simplified site plan focused on legal boundaries and building placement, often used for permitting."},
+    {term:"site analysis", def:"The study of a site's physical, environmental, and legal conditions before design begins."},
+    {term:"site diagramming", def:"Using symbols and diagrams to represent invisible site forces like sun, wind, and views."},
+    {term:"topography", def:"The shape and elevation of the land's surface."},
+    {term:"contours", def:"Lines connecting points of equal elevation on a site."},
+    {term:"contour elevation", def:"The specific height value that a single contour line represents."},
+    {term:"contour profile", def:"A side view showing how the ground rises and falls along one line."},
+    {term:"gis", display:"GIS", def:"Geographic Information System \u2014 digital mapping software used to research site data."},
+    {term:"setbacks", def:"The required minimum distance a structure must be built from a property line."},
+    {term:"utilities", def:"Water, sewer, electric, and gas connections that service a building."},
+    {term:"soil types", def:"Different soil compositions that affect a foundation's design and bearing capacity."},
+  ]},
+  { num: 2, title: "Site Orientation & Plot Plans", words: [
+    {term:"site plan", def:"A scaled drawing showing an entire property, including buildings and their relationship to the site."},
+    {term:"plot plan", def:"A simplified site plan focused on legal boundaries and building placement, often used for permitting."},
+    {term:"easement", def:"A legal right for someone other than the property owner to use part of the land for a specific purpose."},
+    {term:"setback", def:"The required minimum distance a structure must be built from a property line."},
+    {term:"metes-and-bounds", def:"A legal method of describing property boundaries using directions and distances."},
+    {term:"legal description", def:"A formal written description of a property's boundaries used for legal purposes."},
+    {term:"survey plat", def:"A drawing showing the boundaries and dimensions of a piece of land."},
+    {term:"circulation", def:"The pathways people and vehicles use to move through or around a site."},
+    {term:"parking ratio", def:"The required number of parking spaces relative to a building's size or use."},
+    {term:"bench mark", def:"A fixed point of known elevation used as a reference for surveying."},
+    {term:"right-of-way", def:"A strip of land legally set aside for roads, utilities, or public passage."},
+    {term:"annotations", def:"Notes, symbols, and dimensions added to a drawing to communicate information."},
+  ]},
+  { num: 3, title: "Foundation Types", words: [
+    {term:"foundation", def:"The structural system that transfers a building's loads safely into the ground."},
+    {term:"slab-on-grade", def:"A foundation type made of a concrete slab poured directly on the ground."},
+    {term:"crawlspace", def:"A foundation type with a shallow, unfinished space beneath the floor."},
+    {term:"full basement", def:"A foundation type with a full-height, usable below-grade level."},
+    {term:"pole foundation", def:"A foundation system using vertical poles or posts driven into the ground."},
+    {term:"excavation", def:"The process of removing earth to prepare for a foundation."},
+    {term:"shallow foundation", def:"A foundation that transfers loads to soil near the ground's surface."},
+    {term:"hatch pattern", def:"A repeating pattern of lines used in a drawing to represent a specific material."},
+    {term:"presentation drawing", def:"A polished drawing meant to communicate design ideas to a client."},
+    {term:"working drawing", def:"A technical drawing used to guide actual construction."},
+    {term:"construction drawing", def:"A detailed drawing used by builders to construct a project."},
+  ]},
+  { num: 4, title: "Foundation Systems & Materials", words: [
+    {term:"spread footing", def:"A footing that spreads a column or wall's load over a wider area of soil."},
+    {term:"foundation wall", def:"A wall that transfers building loads to the footing and resists soil pressure."},
+    {term:"isolated footing", def:"A footing that supports a single column, independent of other footings."},
+    {term:"stepped footing", def:"A footing that changes elevation in steps to follow sloped ground."},
+    {term:"concrete slab", def:"A flat, horizontal concrete surface, often used as a floor."},
+    {term:"vapor barrier", def:"A material that prevents moisture from passing through a floor or wall assembly."},
+    {term:"control joint", def:"A groove cut into concrete to control where cracking occurs."},
+    {term:"icf", display:"ICF", def:"Insulated Concrete Form \u2014 a foundation wall system using stay-in-place insulating forms filled with concrete."},
+    {term:"precast concrete", def:"Concrete components manufactured off-site and installed once cured."},
+    {term:"brick shelf", def:"A ledge in a foundation wall that supports a brick veneer."},
+    {term:"sheet index", def:"A list identifying every drawing in a complete construction set."},
+  ]},
+  { num: 5, title: "Foundation Components & Sheet Graphics", words: [
+    {term:"pole foundation", def:"A foundation system using vertical poles or posts driven into the ground."},
+    {term:"pile foundation", def:"A deep foundation using long columns driven into the ground to reach stable soil."},
+    {term:"caisson foundation", def:"A deep foundation formed by drilling a shaft and filling it with concrete."},
+    {term:"footing", def:"The base of a foundation that spreads the building's load onto the soil."},
+    {term:"stem wall", def:"The vertical wall of a foundation that connects the footing to the structure above."},
+    {term:"anchor bolt", def:"A bolt that connects a building's sill plate to the foundation."},
+    {term:"vapor barrier", def:"A material that prevents moisture from passing through a floor or wall assembly."},
+    {term:"rebar", def:"Steel reinforcing bar embedded in concrete to increase its strength."},
+    {term:"damp-proofing", def:"A treatment applied to a foundation to resist moisture in well-drained soil."},
+    {term:"title block", def:"The section of a drawing sheet containing project information like scale, date, and drawn-by."},
+    {term:"sheet size", def:"The standard paper dimensions used for a construction drawing."},
+  ]},
+  { num: 6, title: "Loads, Framing, Floor Systems, Stairs & Decks", words: [
+    {term:"dead load", def:"The permanent weight of a structure and its fixed components."},
+    {term:"live load", def:"A temporary or moving load from occupants, furniture, or snow."},
+    {term:"wind load", def:"A dynamic force exerted on a structure by wind."},
+    {term:"seismic load", def:"A dynamic force exerted on a structure by earthquake activity."},
+    {term:"platform framing", def:"A framing method where each floor is built as its own platform."},
+    {term:"balloon framing", def:"A framing method using studs that run continuously from foundation to roof."},
+    {term:"joist", def:"A horizontal framing member that supports a floor or ceiling."},
+    {term:"span table", def:"A reference chart used to determine the correct size and spacing of framing members."},
+    {term:"beam", def:"A horizontal structural member that supports loads from joists or other members above."},
+    {term:"rise", def:"The vertical height of a single stair step."},
+    {term:"run", def:"The horizontal depth of a single stair step."},
+    {term:"stringer", def:"The diagonal structural member that supports a stair's treads and risers."},
+    {term:"tread", def:"The horizontal surface of a stair step."},
+    {term:"riser", def:"The vertical surface between two stair treads."},
+    {term:"headroom", def:"The vertical clearance above a stair or walkway."},
+  ]},
+  { num: 7, title: "Walls, Insulation, Fireplace, Doors/Windows, Millwork", words: [
+    {term:"stud", def:"A vertical framing member used to build a wall."},
+    {term:"sole plate", def:"The horizontal framing member at the bottom of a wall that studs attach to."},
+    {term:"sheathing", def:"A structural panel material applied to the exterior of framing."},
+    {term:"r-value", display:"R-value", def:"A measure of a material's resistance to heat flow."},
+    {term:"vapor retarder", def:"A material that slows the movement of water vapor through a wall assembly."},
+    {term:"ventilation", def:"The controlled movement of air into and out of a space."},
+    {term:"fireplace", def:"A structure designed to safely contain and vent a wood or gas fire."},
+    {term:"chimney", def:"A vertical structure that carries smoke and gases away from a fireplace."},
+    {term:"flue", def:"The passage inside a chimney that carries smoke and gases outward."},
+    {term:"doorframe", def:"The structural frame that a door is hung within."},
+    {term:"window opening", def:"The framed opening in a wall sized to receive a window unit."},
+    {term:"millwork", def:"Finished wood products like trim, molding, and cabinetry."},
+    {term:"molding", def:"A decorative strip of material used to trim edges or joints."},
+    {term:"trim/casing", def:"Finish material used around doors, windows, and other openings."},
+  ]},
+  { num: 8, title: "Roofing, Dormers & Sustainability", words: [
+    {term:"rafter", def:"A sloped structural member that supports a roof."},
+    {term:"ridge board", def:"The horizontal board at the peak of a roof where rafters meet."},
+    {term:"collar tie", def:"A horizontal member connecting opposing rafters to resist spreading."},
+    {term:"eave", def:"The edge of a roof that overhangs the exterior wall."},
+    {term:"soffit", def:"The underside of an overhanging roof eave."},
+    {term:"fascia", def:"The trim board that runs along the edge of a roof."},
+    {term:"truss", def:"A prefabricated, engineered structural frame used to support a roof or floor."},
+    {term:"underlayment", def:"A protective material installed beneath finished roofing or flooring."},
+    {term:"shingle", def:"An individual overlapping unit of roofing material."},
+    {term:"membrane roofing", def:"A continuous waterproof material used on low-slope roofs."},
+    {term:"gutter", def:"A channel that collects and directs water off a roof."},
+    {term:"downspout", def:"A vertical pipe that carries water from a gutter to the ground."},
+    {term:"dormer", def:"A structure projecting from a sloped roof, usually housing a window."},
+    {term:"green roof", def:"A roof partially or fully covered with vegetation."},
+  ]},
+  { num: 9, title: "Capstone Build", words: [
+    {term:"presentation set", def:"A polished, client-facing set of drawings used to communicate a design."},
+    {term:"detail drawing", def:"A large-scale drawing showing a specific building component in depth."},
+    {term:"coordination", def:"Making sure every drawing in a set agrees with every other drawing."},
+    {term:"portfolio", def:"A curated collection of a person's work used to showcase their skills."},
+    {term:"peer review", def:"A structured process of giving and receiving feedback from classmates."},
+  ]},
+  { num: 10, title: "Review & Portfolio", words: [
+    {term:"portfolio", def:"A curated collection of a person's work used to showcase their skills."},
+    {term:"workmanship", def:"The skill and quality demonstrated in the execution of a task."},
+    {term:"competency", def:"A demonstrated ability to perform a specific skill or task."},
+    {term:"reflection", def:"Thoughtful consideration of one's own work, growth, or learning."},
+    {term:"proficiency", def:"A level of skill that meets the expected standard for a task."},
+  ]},
+];
+
+const MAX_GUESSES = 6;
+let target, guesses, currentGuess, gameOver, wordLen;
+
+function populateCycleSelect() {
+  const sel = document.getElementById("cycle-select");
+  const allOpt = document.createElement("option");
+  allOpt.value = "all";
+  allOpt.textContent = "All Cycles";
+  sel.appendChild(allOpt);
+  CYCLES.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = String(c.num);
+    const rangeLabel = c.num === 1 ? "Cycle 1" : "Cycles 1\u2013" + c.num;
+    opt.textContent = rangeLabel + " \u2014 through " + c.title;
+    sel.appendChild(opt);
+  });
+  sel.value = "all";
+  sel.addEventListener("change", startGame);
+}
+
+function dedupedPool(cycleList) {
+  const seen = new Set();
+  const pool = [];
+  cycleList.forEach(c => c.words.forEach(w => {
+    if (!seen.has(w.term)) { seen.add(w.term); pool.push(w); }
+  }));
+  return pool;
+}
+
+function getActivePool() {
+  const sel = document.getElementById("cycle-select");
+  if (sel.value === "all") {
+    return dedupedPool(CYCLES);
+  }
+  const selectedNum = parseInt(sel.value, 10);
+  const cumulativeCycles = CYCLES.filter(c => c.num <= selectedNum);
+  return dedupedPool(cumulativeCycles);
+}
+
+function pickWord() {
+  const pool = getActivePool();
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function startGame() {
+  const entry = pickWord();
+  target = entry;
+  wordLen = entry.term.length;
+  guesses = [];
+  currentGuess = new Array(wordLen).fill("");
+  gameOver = false;
+  document.getElementById("result-panel").classList.remove("show");
+  document.getElementById("message").textContent = "";
+  const wordCount = entry.term.split(/[\s\-\/]+/).length;
+  document.getElementById("length-pill").textContent = wordLen + " characters" + (wordCount > 1 ? " \u00b7 " + wordCount + " words" : "");
+  document.getElementById("guess-pill").textContent = "Guess 1 of " + MAX_GUESSES;
+  renderBoard();
+  renderKeyboard();
+}
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for (let r = 0; r < MAX_GUESSES; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const guessData = guesses[r];
+    const isCurrent = r === guesses.length;
+    for (let c = 0; c < wordLen; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      let letter = "";
+      if (guessData) {
+        letter = guessData.chars[c];
+        tile.classList.add(guessData.states[c]);
+      } else if (isCurrent && currentGuess[c]) {
+        letter = currentGuess[c];
+        tile.classList.add("filled");
+      }
+      tile.textContent = letter === " " ? "\u2423" : letter;
+      row.appendChild(tile);
+    }
+    board.appendChild(row);
+  }
+}
+
+function evaluateGuess(guessChars) {
+  const targetChars = target.term.toLowerCase().split("");
+  const states = new Array(wordLen).fill("gray");
+  const counts = {};
+  targetChars.forEach(ch => { counts[ch] = (counts[ch] || 0) + 1; });
+
+  for (let i = 0; i < wordLen; i++) {
+    if (guessChars[i] === targetChars[i]) {
+      states[i] = "green";
+      counts[guessChars[i]]--;
+    }
+  }
+  for (let i = 0; i < wordLen; i++) {
+    if (states[i] === "green") continue;
+    const ch = guessChars[i];
+    if (counts[ch] > 0) {
+      states[i] = "yellow";
+      counts[ch]--;
+    }
+  }
+  return { chars: guessChars, states };
+}
+
+const keyStateRank = { gray: 0, yellow: 1, green: 2 };
+const keyStates = {};
+
+function updateKeyStates(evaluated) {
+  evaluated.chars.forEach((ch, i) => {
+    const st = evaluated.states[i];
+    const existing = keyStates[ch];
+    if (!existing || keyStateRank[st] > keyStateRank[existing]) {
+      keyStates[ch] = st;
+    }
+  });
+}
+
+function renderKeyboard() {
+  const rows = ["qwertyuiop", "asdfghjkl", "ENTERzxcvbnmBACK", "SYMBOLS"];
+  const kb = document.getElementById("keyboard");
+  kb.innerHTML = "";
+  rows.forEach(rowStr => {
+    const krow = document.createElement("div");
+    krow.className = "krow";
+    if (rowStr === "SYMBOLS") {
+      const symbolKeys = [
+        { key: "-", label: "-", cls: "symbol" },
+        { key: " ", label: "space", cls: "space" },
+        { key: "/", label: "/", cls: "symbol" },
+      ];
+      symbolKeys.forEach(sk => {
+        const btn = document.createElement("button");
+        btn.className = "key " + sk.cls;
+        btn.textContent = sk.label;
+        if (keyStates[sk.key]) btn.classList.add(keyStates[sk.key]);
+        btn.addEventListener("click", () => handleKey(sk.key));
+        krow.appendChild(btn);
+      });
+      kb.appendChild(krow);
+      return;
+    }
+    let keys;
+    if (rowStr.includes("ENTER")) {
+      keys = ["ENTER", ...rowStr.replace("ENTER", "").replace("BACK", "").split(""), "BACK"];
+    } else {
+      keys = rowStr.split("");
+    }
+    keys.forEach(k => {
+      const btn = document.createElement("button");
+      btn.className = "key" + ((k === "ENTER" || k === "BACK") ? " wide" : "");
+      btn.textContent = k === "BACK" ? "\u232B" : (k === "ENTER" ? "Enter" : k);
+      if (k.length === 1 && keyStates[k]) {
+        btn.classList.add(keyStates[k]);
+      }
+      btn.addEventListener("click", () => handleKey(k === "ENTER" ? "Enter" : (k === "BACK" ? "Backspace" : k)));
+      krow.appendChild(btn);
+    });
+    kb.appendChild(krow);
+  });
+}
+
+function showMessage(text) {
+  const el = document.getElementById("message");
+  el.textContent = text;
+  if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 1800);
+}
+
+function handleKey(key) {
+  if (gameOver) return;
+  if (key === "Enter") {
+    if (currentGuess.some(c => !c)) {
+      showMessage("Not enough characters");
+      return;
+    }
+    const evaluated = evaluateGuess(currentGuess.slice());
+    guesses.push(evaluated);
+    updateKeyStates(evaluated);
+    const won = currentGuess.join("") === target.term.toLowerCase();
+    currentGuess = new Array(wordLen).fill("");
+    renderBoard();
+    renderKeyboard();
+
+    if (won) {
+      gameOver = true;
+      endGame(true);
+      return;
+    }
+    if (guesses.length >= MAX_GUESSES) {
+      gameOver = true;
+      endGame(false);
+      return;
+    }
+    document.getElementById("guess-pill").textContent = "Guess " + (guesses.length + 1) + " of " + MAX_GUESSES;
+  } else if (key === "Backspace") {
+    for (let i = wordLen - 1; i >= 0; i--) {
+      if (currentGuess[i]) { currentGuess[i] = ""; break; }
+    }
+    renderBoard();
+  } else if (/^[a-z \-\/]$/i.test(key) && key.length === 1) {
+    for (let i = 0; i < wordLen; i++) {
+      if (!currentGuess[i]) { currentGuess[i] = key.toLowerCase(); break; }
+    }
+    renderBoard();
+  }
+}
+
+function endGame(won) {
+  document.getElementById("message").textContent = won ? "Nice work!" : "Out of guesses";
+  const panel = document.getElementById("result-panel");
+  document.getElementById("result-term").textContent = target.display || (target.term.charAt(0).toUpperCase() + target.term.slice(1));
+  document.getElementById("result-def").textContent = target.def;
+  panel.classList.add("show");
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleKey("Enter");
+  else if (e.key === "Backspace") handleKey("Backspace");
+  else if (e.key === " ") { e.preventDefault(); handleKey(" "); }
+  else if (e.key === "-" || e.key === "/") handleKey(e.key);
+  else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toLowerCase());
+});
+
+document.getElementById("new-word-btn").addEventListener("click", startGame);
+
+populateCycleSelect();
+const urlParams = new URLSearchParams(window.location.search);
+const cycleParam = urlParams.get("cycle");
+if (cycleParam && (cycleParam === "all" || CYCLES.some(c => String(c.num) === cycleParam))) {
+  document.getElementById("cycle-select").value = cycleParam;
+}
+startGame();
+</script>
+</body>
+</html>
